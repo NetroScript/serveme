@@ -1,0 +1,31 @@
+.card.text-white.bg-primary
+  .card-body
+    .row
+      .col-md-12
+        %h4
+          Order details
+
+        %h5
+          - if @order.gift?
+            = "Gift,"
+          = "#{@order.product.name}, #{number_to_currency(@order.product.price)}"
+
+    = simple_form_for(@order, url: url_for(controller: "orders", action: "stripe")) do |f|
+      .row.credit-card-row
+        .col-md-12
+          #stripe-card
+          #stripe-errors
+
+          .row
+            .col-md-12.offset-md-4
+              .stripe-logo= image_tag "powered_by_stripe.png"
+
+      = f.input :id, as: :hidden
+      = f.input :payer_id, as: :hidden
+      = f.input :payment_intent, as: :hidden, input_html: { value: @payment_intent }
+      = f.input :gift, as: :hidden
+
+      .row
+        .col-md-12.text-center
+          %button.btn.btn-success.submit{:type => :submit}
+            Buy

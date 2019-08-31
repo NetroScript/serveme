@@ -7,14 +7,11 @@ class OrdersController < ApplicationController
   end
 
   def create
-    order_params = params.require(:order).permit([:product_id, :gift])
-    paypal_order.product_id = order_params[:product_id].to_i
-    paypal_order.gift       = order_params[:gift]
-    if paypal_order.save && paypal_order.prepare
-      redirect_to paypal_order.checkout_url
+    order_params = params.require(:order).permit([:product_id, :gift, :payment_provider])
+    if order_params["payment_provider"] == "stripe"
+      pay_with_stripe(order_params)
     else
-      flash[:alert] = "Something went wrong creating your order, please try again"
-      render :new
+      pay_with_paypal(order_params)
     end
   end
 
@@ -33,22 +30,43 @@ class OrdersController < ApplicationController
     end
   end
 
-  def stripe
-    $lock.synchronize("stripe-charge-#{current_user.id}") do
-      if params[:stripe_token] && params[:product_id] && params[:gift]
-        order = current_user.stripe_orders.build
-        order.payer_id = params[:stripe_token]
-        order.product = Product.active.find(params[:product_id].to_i)
-        order.gift = (params[:gift] == "true")
-        order.save!
-        charge = order.charge
-        if charge == "succeeded"
-          render plain: { charge_status: charge, product_name: order.product_name, gift: order.gift, voucher: order.voucher.try(:code) }.to_json
-        else
-          render plain: { charge_status: charge }.to_json, status: 402
-        end
-      end
+  def stripe_callback
+    puts params.inspect
+    Order.last.handle_successful_payment!
+    head :ok
+  end
+
+  def paid_with_stripe
+    order = current_user.stripe_orders.find(params.require(:order_id))
+    render plain: { product_name: order.product_name, gift: order.gift, voucher: order.voucher.try(:code) }.to_json
+  end
+
+  def pay_with_paypal(order_params)
+    paypal_order.product_id = order_params[:product_id].to_i
+    paypal_order.gift       = order_params[:gift]
+    if paypal_order.save && paypal_order.prepare
+      redirect_to paypal_order.checkout_url
+    else
+      flash[:alert] = "Something went wrong creating your order, please try again"
+      render :new
     end
+  end
+
+  def pay_with_stripe(order_params)
+    $lock.synchronize("stripe-intent-#{current_user.id}") do
+      order = current_user.stripe_orders.build
+      order.product = Product.active.find_by_id(order_params["product_id"].to_i)
+      order.gift = (order_params["gift"] == "true")
+      order.save!
+      @payment_intent = order.create_intent
+      redirect_to paying_with_stripe_path(order_id: order.id, payment_intent: @payment_intent.client_secret)
+    end
+  end
+
+  def paying_with_stripe
+    order_id, payment_intent = params.require([:order_id, :payment_intent])
+    @order = current_user.orders.joins(:product).find_by_id(order_id)
+    @payment_intent = payment_intent
   end
 
   def order

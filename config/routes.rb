@@ -126,10 +126,13 @@ Serveme::Application.routes.draw do
 
   get   '/server_statistics/server/:server_id'                            => 'server_statistics#show_for_server',                  :as => "show_server_statistic"
   get   '/server_statistics/reservation/:reservation_id'                  => 'server_statistics#show_for_reservation',             :as => "show_reservation_server_statistic"
+  get   '/orders/paying-with-stripe/:order_id/:payment_intent', :to => 'orders#paying_with_stripe', :as => 'paying_with_stripe'
+  post   '/orders/paid-with-stripe/:order_id', :to => 'orders#paid_with_stripe', :as => 'paid_with_stripe'
 
   get   '/login',                         :to => 'sessions#new',      :as => :login
   get   '/users/auth/failure',            :to => 'sessions#failure'
   post  '/users/auth/failure',            :to => 'sessions#failure'
+  post  '/stripe/callback',               :to => 'orders#stripe_callback'
 
   root :to => "pages#welcome"
   unless Rails.env.test?

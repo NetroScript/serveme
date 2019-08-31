@@ -13,14 +13,13 @@
     = simple_form_for(@order) do |f|
       .row.credit-card-row
         .col-md-12
-          #stripe-card
-          #stripe-errors
 
           .row
             .col-md-12.offset-md-4
               .stripe-logo= image_tag "powered_by_stripe.png"
 
       = f.input :payer_id, as: :hidden
+      = f.input :payment_provider, as: :hidden, input_html: {value: "paypal"}
 
       .row
         .col-md-12

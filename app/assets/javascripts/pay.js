@@ -8,7 +8,8 @@ jQuery(function($) {
   creditCardButton().click(function() {
     enableStripe();
   });
-  if (orderForm().length > 0) {
+  if (stripeOrderForm().length > 0) {
+    enableStripe();
     setupStripe();
   }
 
@@ -35,6 +36,7 @@ jQuery(function($) {
   }
 
   function enablePaypal(slide) {
+    $('input[name="order[payment_provider]"]').val("paypal");
     paypalButton().addClass("selected");
     creditCardButton().removeClass("selected");
     if (slide === true) {
@@ -44,7 +46,9 @@ jQuery(function($) {
     }
     orderFormSubmit().html("Pay with PayPal");
   }
+
   function enableStripe() {
+    $('input[name="order[payment_provider]"]').val("stripe");
     paypalButton().removeClass("selected");
     creditCardButton().addClass("selected");
     creditCardRow().slideDown();
@@ -53,49 +57,44 @@ jQuery(function($) {
 
   orderForm().submit(function(event) {
     if (payingWithStripe()) {
-      $("#stripe-errors").html("");
       // Disable the submit button to prevent repeated clicks:
       orderFormSubmit().prop('disabled', true);
       orderFormSubmit().html("<i class='fa fa-spinner fa-spin' '></i> Working...");
-
-      stripe.createToken(card).then(function(result) {
-        if (result.error) {
-          var errorElement = document.getElementById('stripe-errors');
-          errorElement.textContent = result.error.message;
-        } else {
-          stripeResponseHandler(result.token.id);
-        }
-      });
-
-      // Prevent the form from being submitted:
-      event.preventDefault();
-      return false;
     }
   });
 
-  function stripeResponseHandler(token) {
-    postOrder(token, productId(), gift());
-  }
+  stripeOrderForm().submit(function(event) {
+    stripe.handleCardPayment(paymentIntentSecret(), card).then(function(result) {
+      if (result.error) {
+        var errorElement = document.getElementById('stripe-errors');
+        errorElement.textContent = result.error.message;
+      } else {
+        console.log(result);
+      $.post("orders/paid-with-stripe/" + orderId()).
+        done(function( data ) {
+          $(".premium-page").hide();
+          json = JSON.parse(data);
+          $(".stripe-result").show();
+          if (json['gift'] === true) {
+            href = $("#voucher-claim-url").attr('href');
+            href_with_code = href + "/" + json['voucher'];
+            $("#voucher-claim-url").attr('href', href_with_code);
+            $(".stripe-result .gift").show();
+          } else {
+            $(".stripe-result .mine").show();
+          }
+        }).
+        fail(function( data ) {
+          orderFailed(data);
+        });
 
-  function postOrder(stripeToken, productId, gift) {
-    $.post("orders/stripe", { stripe_token: stripeToken, product_id: productId, gift: gift}).
-      done(function( data ) {
-        $(".premium-page").hide();
-        json = JSON.parse(data);
-        $(".stripe-result").show();
-        if (json['gift'] === true) {
-          href = $("#voucher-claim-url").attr('href');
-          href_with_code = href + "/" + json['voucher'];
-          $("#voucher-claim-url").attr('href', href_with_code);
-          $(".stripe-result .gift").show();
-        } else {
-          $(".stripe-result .mine").show();
-        }
-      }).
-      fail(function( data ) {
-        orderFailed(data);
-      });
-  }
+      }
+    });
+
+    // Prevent the form from being submitted:
+    event.preventDefault();
+    return false;
+  });
 
   function orderFailed(response) {
     json = JSON.parse(response.responseText);
@@ -107,11 +106,17 @@ jQuery(function($) {
   function orderForm() {
     return $('form.new_order');
   }
+  function stripeOrderForm() {
+    return $('form.edit_stripe_order');
+  }
   function orderFormSubmit() {
     return orderForm().find(".submit");
   }
   function productId() {
     return $("#order_product_id").val();
+  }
+  function paymentIntentSecret() {
+    return $("#stripe_order_payment_intent").val();
   }
   function gift() {
     return $("#order_gift_true").is(':checked');

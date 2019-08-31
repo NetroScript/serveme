@@ -5,7 +5,7 @@ class Order < ActiveRecord::Base
   belongs_to :user
   has_one :voucher
 
-  attr_accessor :source_type
+  attr_accessor :source_type, :payment_provider
   delegate :name, to: :product, allow_nil: true, prefix: true
 
   validates_presence_of :user_id, :product_id
